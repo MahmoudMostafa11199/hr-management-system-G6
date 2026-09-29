@@ -1,0 +1,17 @@
+{
+  "name": "hr-management-system",
+  "version": "1.0.0",
+  "description": "A full-featured HR Management System backend built with NestJS, Prisma & PostgreSQL",
+  "private": true,
+  "author": "Mahmoud Mostafa",
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.24.0",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@11.24.0",
+  "type": "module"
+}

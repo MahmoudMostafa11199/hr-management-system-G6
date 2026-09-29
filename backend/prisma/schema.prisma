@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  HR
+  MANAGER
+  SECURITY
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum ContractType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  ON_LEAVE
+}
+
+enum PermissionType {
+  ANNUAL_LEAVE
+  SICK_LEAVE
+  EMERGENCY_LEAVE
+  EXIT_PERMISSION
+  WORK_FROM_HOME
+  UNPAID_LEAVE
+}
+
+enum PermissionStatus {
+  PENDING
+  MANAGER_APPROVED
+  HR_APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  TO_DO
+  IN_PROGRESS
+  UNDER_REVIEW
+  DONE
+  CLOSED
+}
+
+enum PayslipStatus {
+  DRAFT
+  FINALISED
+}
+
+enum NotificationType {
+  PERMISSION_REQUEST
+  PERMISSION_APPROVED
+  PERMISSION_REJECTED
+  TASK_ASSIGNED
+  TASK_COMMENT
+  TASK_STATUS_CHANGED
+  PAYSLIP_FINALISED
+}
+
+//----------------------------------------------
+// User
+model User {
+  id                    String         @id @default(uuid())
+  email                 String         @unique
+  password              String
+  role                  Role           @default(EMPLOYEE)
+  isActive              Boolean        @default(true)
+  lastLogin             DateTime?
+  passwordResetToken    String?
+  passwordResetExpiry   DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  employee              Employee?
+  markedAttendances     Attendance[]   @relation("MarkedAttendances")
+  notification          Notification[]
+}
+
+//----------------------------------------------
+// Employee
+model Employee {
+  id                    String         @id @default(uuid())
+  firstName             String
+  lastName              String
+  nationalId            String         @unique
+  phone                 String?
+  photo                 String?
+  jobTitle              String
+  hireDate              DateTime
+  contractType          ContractType   @default(FULL_TIME)
+  baseSalary            Float
+  bankAccount           String?
+  emergencyContact      String?
+  status                EmployeeStatus @default(ACTIVE)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  userId                String         @unique
+  user                  User           @relation(fields: [userId], references: [id])
+
+  departmentId          String?
+  department            Department?    @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+
+  managedDepartment     Department?    @relation("DepartmentManager")
+
+  attendance            Attendance[]
+  PermissionRequest     PermissionRequest[]
+  LeaveBalance          LeaveBalance[]
+
+  assignedTasks         Task[]         @relation("AssignedTasks")
+  createdTasks          Task[]         @relation("CreatedTasks")
+  taskComments          TaskComment[]
+  taskStatusHistory     TaskStatusHistory[]
+  payslip               Payslip[]
+  finalisedPayslips     Payslip[]      @relation("FinalisedPayslips")
+}
+
+//----------------------------------------------
+// Department
+model Department {
+  id                    String         @id @default(uuid())
+  name                  String         @unique
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  employees             Employee[]     @relation("DepartmentEmployees")
+  manager               Employee?      @relation("DepartmentManager", fields: [managerId], references: [id])
+  managerId             String?        @unique
+}
+
+//----------------------------------------------
+// Attendance
+model Attendance {
+  id                    String         @id @default(uuid())
+  date                  DateTime       @db.Date
+  checkIn               DateTime?
+  checkOut              DateTime?
+  status                AttendanceStatus
+  note                  String?
+  
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  employeeId            String
+  employee              Employee       @relation(fields: [employeeId], references: [id])
+
+  markedById            String?
+  markedBy              User?           @relation("MarkedAttendances", fields: [markedById], references: [id])
+
+  shiftId               String?
+  shiftConfig           ShiftConfig?    @relation(fields: [shiftId], references: [id])
+
+  @@unique([employeeId, date])
+}
+
+// 
+model ShiftConfig {
+  id                    String         @id @default(uuid())
+  name                  String
+  startTime             String
+  endTime               String
+  lateToleranceMinutes  Int            @default(15)
+  deductionRule         Float
+
+  attendances           Attendance[]
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+//----------------------------------------------
+// Permission
+model LeaveType {
+  id                    String         @id @default(uuid())
+  name                  String         @unique
+  maxDurationDays       Int?
+  requiresHrApproval    Boolean        @default(true)
+
+  permissionRequest     PermissionRequest[]
+  leaveBalance          LeaveBalance[]
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model PermissionRequest {
+  id                    String         @id @default(uuid())
+  startDate             DateTime
+  endDate               DateTime
+  reason                String
+  attachment            String?
+
+  status                PermissionStatus  @default(PENDING)
+  managerComment        String?
+  hrComment             String?
+
+  managerActionAt       DateTime?
+  hrActionAt            DateTime?
+
+  employeeId            String
+  employee              Employee       @relation(fields: [employeeId], references: [id])
+
+  leaveTypeId           String
+  leaveType             LeaveType      @relation(fields: [leaveTypeId], references: [id])
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model LeaveBalance {
+  id                    String         @id @default(uuid())
+  year                  Int
+  balance               Float
+
+  employeeId            String
+  employee              Employee       @relation(fields: [employeeId], references: [id])
+
+  leaveTypeId           String
+  leaveType             LeaveType      @relation(fields: [leaveTypeId], references: [id])
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@unique([employeeId, leaveTypeId, year])
+}
+
+//----------------------------------------------
+// Tasks
+model Task {
+  id                    String         @id @default(uuid())
+  title                 String
+  description           String?
+  deadline              DateTime
+  priority              TaskPriority
+  status                TaskStatus     @default(TO_DO)
+  
+  assignedToId          String
+  assignedTo            Employee       @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  createdById           String
+  createdBy             Employee       @relation("CreatedTasks", fields: [createdById], references: [id])
+
+  comments              TaskComment[]
+  attachments           TaskAttachment[]
+  taskStatusHistory     TaskStatusHistory[]
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model TaskComment {
+  id                    String         @id @default(uuid())
+  content               String
+
+  taskId                String
+  task                  Task           @relation(fields: [taskId], references: [id])
+
+  authorId              String
+  author                Employee       @relation(fields: [authorId], references: [id])
+
+  createdAt             DateTime       @default(now())
+}
+
+model TaskAttachment {
+  id                    String         @id @default(uuid())
+  fileName              String
+  originalName          String
+  fileUrl               String
+
+  createdAt             DateTime       @default(now())
+
+  taskId                String
+  task                  Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskStatusHistory {
+  id                    String         @id @default(uuid())
+  
+  taskId                String
+  task                  Task           @relation(fields: [taskId], references: [id])
+
+  fromStatus            TaskStatus?
+  toStatus              TaskStatus
+
+  changedById           String
+  changedBy             Employee       @relation(fields: [changedById], references: [id])
+
+  changedAt             DateTime       @default(now())
+}
+
+//----------------------------------------------
+// Payroll
+model PayrollConfig {
+  id                          String   @id @default(uuid())
+  transportAllowance          Float
+  housingAllowance            Float
+  medicalAllowance            Float
+  lateDeductionAmount         Float
+  overdueTaskDeductionPercent Float
+  effectiveFrom               DateTime
+  
+  createdAt                   DateTime @default(now())
+}
+
+model Payslip {
+  id                          String        @id @default(uuid())
+  employeeId                  String
+  employee                    Employee      @relation(fields: [employeeId], references: [id])
+
+  month                       Int
+  year                        Int
+
+  baseSalary                  Float
+  transportAllowance          Float
+  housingAllowance            Float
+  medicalAllowance            Float
+  performanceBonus            Float         @default(0)
+  overtimeBonus               Float         @default(0)
+
+  absentDays                  Int
+  absenceDeduction            Float
+  lateCount                   Int
+  lateDeduction               Float
+  overdueTasksCount           Int
+  overdueDeduction            Float
+
+  grossSalary                 Float
+  totalDeductions             Float
+  tax                         Float         @default(0)
+  netSalary                   Float
+
+  status                      PayslipStatus @default(DRAFT)
+
+  finalisedById               String?
+  finalisedBy                 Employee?     @relation("FinalisedPayslips", fields: [finalisedById], references: [id])
+  finalisedAt                 DateTime?
+
+
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+
+  @@unique([employeeId, month, year])
+}
+
+
+//----------------------------------------------
+// Notification
+model Notification {
+  id                          String       @id @default(uuid())
+  title                       String
+  message                     String
+  type                        NotificationType
+  isRead                      Boolean      @default(false)
+  link                        String?
+  createdAt                   DateTime     @default(now())
+
+  userId                      String
+  user                        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

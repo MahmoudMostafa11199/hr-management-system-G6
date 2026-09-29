@@ -14,5 +14,17 @@ frontend/node_modules/
 backend/dist/
 backend/build/
 backend/node_modules/
+backend/src/generated/
+
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+backend/.agents/
+backend/.claude/
+backend/.cursor/
+backend/.devin/
+backend/.windsurf/
+
+*.log
 
 .vscode/
